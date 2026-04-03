@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import Home from './pages/Home.jsx'
 import NewSession from './pages/NewSession.jsx'
 import SessionDetail from './components/SessionDetail.jsx'
-import { purgeExpiredSessions } from './utils/storage.js'
+import { purgeExpiredSessions, getActiveSessions } from './utils/storage.js'
+import { rescheduleAllNotifications, getNotificationPermission } from './utils/notifications.js'
 
 export default function App() {
   const [page, setPage] = useState('home') // 'home' | 'new-session' | 'session-detail'
@@ -17,8 +18,13 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    // Purge on load
-    runPurge()
+    // Purge on load, then reschedule any active notifications
+    runPurge().then(async () => {
+      if (getNotificationPermission() === 'granted') {
+        const sessions = await getActiveSessions()
+        rescheduleAllNotifications(sessions)
+      }
+    })
 
     // Purge every 60 seconds
     const interval = setInterval(runPurge, 60_000)

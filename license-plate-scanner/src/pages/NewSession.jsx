@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { MapPin, Loader2, ArrowLeft, Navigation, AlertCircle } from 'lucide-react'
 import { createSession } from '../utils/storage.js'
+import { recordNewSession } from '../utils/stats.js'
+import { haptic } from '../utils/haptics.js'
 
 export default function NewSession({ onBack, onSessionCreated }) {
   const [gettingLocation, setGettingLocation] = useState(false)
@@ -62,8 +64,10 @@ export default function NewSession({ onBack, onSessionCreated }) {
 
   const handleStart = async () => {
     try {
+      haptic.medium()
       const loc = location || { lat: 0, lng: 0, address: 'Unknown location' }
       const sessionId = await createSession(loc)
+      recordNewSession()
       onSessionCreated(sessionId)
     } catch (err) {
       console.error('Failed to create session:', err)
