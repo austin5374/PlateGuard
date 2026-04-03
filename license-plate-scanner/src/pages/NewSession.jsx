@@ -1,35 +1,42 @@
 import { useState } from 'react'
-import { MapPin, Loader2, ArrowLeft, Navigation, AlertCircle } from 'lucide-react'
+import { MapPin, Loader2, ArrowLeft, Navigation, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { createSession } from '../utils/storage.js'
 import { recordNewSession } from '../utils/stats.js'
 import { haptic } from '../utils/haptics.js'
 
+// GPS requires HTTPS on mobile browsers (except localhost).
+// We detect this so we can give a helpful message instead of silently failing.
+function isSecureContext() {
+  return window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+}
+
 export default function NewSession({ onBack, onSessionCreated }) {
-  const [gettingLocation, setGettingLocation] = useState(false)
-  const [locationError, setLocationError] = useState(null)
-  const [location, setLocation] = useState(null)
-  const [reverseGeoStatus, setReverseGeoStatus] = useState('idle') // idle | loading | done | error
+  const [label,           setLabel]           = useState('')      // user-typed location
+  const [gpsStatus,       setGpsStatus]       = useState('idle')  // idle | loading | done | denied | unavailable
+  const [gpsCoords,       setGpsCoords]       = useState(null)    // { lat, lng }
+  const [gpsAddress,      setGpsAddress]      = useState(null)
 
-  const getLocation = async () => {
-    setGettingLocation(true)
-    setLocationError(null)
-    setLocation(null)
+  const canStart = label.trim().length > 0
 
+  // ── Try to get GPS coords (optional enhancement) ──────────────────────────
+  const getGPS = async () => {
+    if (!isSecureContext()) {
+      setGpsStatus('unavailable')
+      return
+    }
     if (!navigator.geolocation) {
-      setLocationError('Geolocation is not supported by your browser.')
-      setGettingLocation(false)
+      setGpsStatus('unavailable')
       return
     }
 
+    setGpsStatus('loading')
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude
         const lng = pos.coords.longitude
-        const locObj = { lat, lng, address: null }
-        setLocation(locObj)
+        setGpsCoords({ lat, lng })
 
-        // Try reverse geocode
-        setReverseGeoStatus('loading')
+        // Try reverse geocode for a human-readable address
         try {
           const resp = await fetch(
             `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
@@ -37,35 +44,30 @@ export default function NewSession({ onBack, onSessionCreated }) {
           )
           if (resp.ok) {
             const data = await resp.json()
-            const addr = data.display_name || null
-            locObj.address = addr
-            setLocation({ ...locObj, address: addr })
-            setReverseGeoStatus('done')
-          } else {
-            setReverseGeoStatus('error')
+            setGpsAddress(data.display_name || null)
           }
-        } catch {
-          setReverseGeoStatus('error')
-        }
+        } catch {}
 
-        setGettingLocation(false)
+        setGpsStatus('done')
       },
       (err) => {
-        let msg = 'Could not get your location.'
-        if (err.code === 1) msg = 'Location permission denied. Please allow location access.'
-        else if (err.code === 2) msg = 'Position unavailable. Try again.'
-        else if (err.code === 3) msg = 'Location request timed out. Try again.'
-        setLocationError(msg)
-        setGettingLocation(false)
+        setGpsStatus(err.code === 1 ? 'denied' : 'unavailable')
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     )
   }
 
+  // ── Start session ──────────────────────────────────────────────────────────
   const handleStart = async () => {
+    if (!canStart) return
+    haptic.medium()
     try {
-      haptic.medium()
-      const loc = location || { lat: 0, lng: 0, address: 'Unknown location' }
+      const loc = {
+        lat:     gpsCoords?.lat   ?? 0,
+        lng:     gpsCoords?.lng   ?? 0,
+        address: gpsAddress ?? label.trim(),
+        label:   label.trim(),
+      }
       const sessionId = await createSession(loc)
       recordNewSession()
       onSessionCreated(sessionId)
@@ -74,158 +76,140 @@ export default function NewSession({ onBack, onSessionCreated }) {
     }
   }
 
-  const canStart = !gettingLocation
-
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="border-b border-cyber-border bg-cyber-surface/80 backdrop-blur-sm sticky top-0 z-20">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="p-2 rounded-lg neon-btn-cyan text-sm"
-          >
+          <button onClick={() => { haptic.light(); onBack() }} className="p-2 rounded-lg neon-btn-cyan text-sm">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <h1 className="font-display text-base font-bold text-cyber-green tracking-widest text-glow-green">
               NEW PARKING SESSION
             </h1>
-            <p className="text-xs text-cyber-muted font-mono">CAPTURE LOCATION</p>
+            <p className="text-xs text-cyber-muted font-mono">SET LOCATION</p>
           </div>
         </div>
       </header>
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-8 flex flex-col gap-6">
 
-        {/* Instructions */}
+        {/* ── Where are you parked? ── */}
+        <div className="rounded-lg p-5 bg-cyber-card cyber-border space-y-4">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-cyber-cyan" />
+            <h2 className="font-display text-cyber-cyan text-sm tracking-widest">WHERE ARE YOU PARKED?</h2>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-mono text-cyber-muted mb-2 tracking-widest">
+              LOCATION LABEL <span className="text-cyber-red">*</span>
+            </label>
+            <input
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder='e.g. "Target", "Work - Garage B", "Whole Foods Row 4"'
+              className="w-full bg-black border border-cyber-cyan/40 rounded px-3 py-3
+                font-mono text-cyber-text text-sm focus:outline-none focus:border-cyber-cyan
+                focus:ring-1 focus:ring-cyber-cyan/30 placeholder-cyber-muted/40"
+              autoFocus
+            />
+            <p className="text-[10px] text-cyber-muted font-mono mt-1.5">
+              Type anywhere you'll remember — store name, level, row, etc.
+            </p>
+          </div>
+
+          {/* ── Optional GPS enhancement ── */}
+          <div className="border-t border-cyber-border pt-4">
+            <p className="text-[10px] font-mono text-cyber-muted tracking-widest mb-3">
+              OPTIONAL — ADD GPS COORDINATES
+            </p>
+
+            {gpsStatus === 'idle' && (
+              <button
+                onClick={getGPS}
+                className="flex items-center gap-2 neon-btn-cyan text-xs px-4 py-2 rounded"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                USE MY CURRENT LOCATION
+              </button>
+            )}
+
+            {gpsStatus === 'loading' && (
+              <div className="flex items-center gap-2 text-cyber-cyan text-xs font-mono">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                ACQUIRING GPS...
+              </div>
+            )}
+
+            {gpsStatus === 'done' && gpsCoords && (
+              <div className="flex items-start gap-2 p-2 rounded bg-cyber-green/5 border border-cyber-green/20">
+                <CheckCircle2 className="w-4 h-4 text-cyber-green flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] text-cyber-green font-mono tracking-wider">GPS COORDINATES ADDED</p>
+                  <p className="text-[10px] text-cyber-muted font-mono mt-0.5">
+                    {gpsCoords.lat.toFixed(5)}, {gpsCoords.lng.toFixed(5)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {gpsStatus === 'denied' && (
+              <div className="flex items-start gap-2 p-2 rounded bg-red-950/20 border border-cyber-red/20">
+                <AlertCircle className="w-4 h-4 text-cyber-red flex-shrink-0 mt-0.5" />
+                <p className="text-[10px] text-cyber-red font-mono leading-relaxed">
+                  Location permission denied. Your text label above is all you need.
+                </p>
+              </div>
+            )}
+
+            {gpsStatus === 'unavailable' && (
+              <div className="flex items-start gap-2 p-2 rounded border border-cyber-border">
+                <AlertCircle className="w-4 h-4 text-cyber-muted flex-shrink-0 mt-0.5" />
+                <p className="text-[10px] text-cyber-muted font-mono leading-relaxed">
+                  GPS requires HTTPS — not available over local network.
+                  Your text label above is all you need.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Instructions ── */}
         <div className="rounded-lg p-4 bg-cyber-card cyber-border">
-          <h2 className="font-display text-cyber-cyan text-sm tracking-widest mb-2">INSTRUCTIONS</h2>
+          <h2 className="font-display text-cyber-cyan text-xs tracking-widest mb-2">HOW IT WORKS</h2>
           <ol className="text-xs text-cyber-muted font-mono space-y-1.5 list-decimal list-inside">
-            <li>Get your current GPS location (optional but recommended)</li>
-            <li>Start session — you'll scan plates next</li>
-            <li>Photograph left and right neighboring cars</li>
-            <li>Session auto-deletes in exactly 3 hours</li>
+            <li>Name where you parked above</li>
+            <li>Scan the license plates of cars on your left and right</li>
+            <li>Walk away — your data is stored privately on this device</li>
+            <li>Session auto-deletes after 3 hours</li>
           </ol>
         </div>
 
-        {/* Location section */}
-        <div className="rounded-lg p-5 bg-cyber-card cyber-border">
-          <div className="flex items-center gap-2 mb-4">
-            <MapPin className="w-5 h-5 text-cyber-cyan" />
-            <h2 className="font-display text-cyber-cyan text-sm tracking-widest">GPS LOCATION</h2>
-          </div>
+        {/* ── Start button ── */}
+        <button
+          onClick={handleStart}
+          disabled={!canStart}
+          className="w-full py-5 px-6 rounded-xl neon-btn font-display text-xl tracking-widest
+            flex items-center justify-center gap-3
+            disabled:opacity-30 disabled:cursor-not-allowed"
+          style={canStart ? {
+            background:  'linear-gradient(135deg, rgba(0,255,136,0.12) 0%, rgba(0,229,255,0.06) 100%)',
+            boxShadow:   '0 0 30px rgba(0,255,136,0.2)',
+          } : undefined}
+        >
+          <span>INITIATE SESSION</span>
+          <span className="text-cyber-cyan">→</span>
+        </button>
 
-          {!location && !gettingLocation && (
-            <div className="flex flex-col gap-3">
-              <p className="text-xs text-cyber-muted font-mono">
-                Your parking location helps identify where you parked.
-                Location data is stored locally only.
-              </p>
-              <button
-                onClick={getLocation}
-                className="flex items-center justify-center gap-2 py-3 px-4 rounded neon-btn-cyan text-sm"
-              >
-                <Navigation className="w-4 h-4" />
-                GET CURRENT LOCATION
-              </button>
-            </div>
-          )}
-
-          {gettingLocation && (
-            <div className="flex items-center gap-3 py-3">
-              <Loader2 className="w-5 h-5 text-cyber-green animate-spin" />
-              <div>
-                <p className="text-sm text-cyber-green font-mono">ACQUIRING GPS SIGNAL...</p>
-                {reverseGeoStatus === 'loading' && (
-                  <p className="text-xs text-cyber-muted font-mono mt-1">Reverse geocoding address...</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {locationError && (
-            <div className="flex items-start gap-2 p-3 rounded bg-red-950/30 border border-cyber-red/30 mt-2">
-              <AlertCircle className="w-4 h-4 text-cyber-red flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs text-cyber-red font-mono">{locationError}</p>
-                <button
-                  onClick={getLocation}
-                  className="text-xs text-cyber-cyan font-mono mt-1 underline"
-                >
-                  Try again
-                </button>
-              </div>
-            </div>
-          )}
-
-          {location && (
-            <div className="space-y-2">
-              <div className="p-3 rounded bg-cyber-surface border border-cyber-green/20">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-2 h-2 bg-cyber-green rounded-full animate-pulse" />
-                  <span className="text-xs text-cyber-green font-mono tracking-wider">LOCATION ACQUIRED</span>
-                </div>
-                <p className="text-xs text-cyber-text font-mono">
-                  {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
-                </p>
-                {location.address && (
-                  <p className="text-xs text-cyber-cyan font-mono mt-1 leading-relaxed">
-                    {location.address}
-                  </p>
-                )}
-                {reverseGeoStatus === 'loading' && (
-                  <p className="text-xs text-cyber-muted font-mono mt-1 animate-breathe">
-                    Fetching address...
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={getLocation}
-                className="text-xs text-cyber-muted font-mono underline"
-              >
-                Refresh location
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* No location skip */}
-        {!location && !gettingLocation && (
-          <p className="text-xs text-cyber-muted font-mono text-center">
-            Or{' '}
-            <button
-              onClick={handleStart}
-              className="text-cyber-cyan underline"
-            >
-              skip location and start anyway
-            </button>
+        {!canStart && (
+          <p className="text-center text-xs text-cyber-muted font-mono">
+            Enter a location name above to continue
           </p>
         )}
 
-        {/* Start button */}
-        {location && (
-          <button
-            onClick={handleStart}
-            disabled={!canStart}
-            className="w-full py-5 px-6 rounded-lg neon-btn font-display text-xl tracking-widest flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{
-              background: canStart
-                ? 'linear-gradient(135deg, rgba(0,255,136,0.12) 0%, rgba(0,229,255,0.06) 100%)'
-                : undefined,
-              boxShadow: canStart ? '0 0 30px rgba(0,255,136,0.2)' : undefined
-            }}
-          >
-            {gettingLocation ? (
-              <Loader2 className="w-6 h-6 animate-spin" />
-            ) : (
-              <>
-                <span>INITIATE SESSION</span>
-                <span className="text-cyber-cyan">→</span>
-              </>
-            )}
-          </button>
-        )}
       </main>
     </div>
   )

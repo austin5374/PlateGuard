@@ -190,14 +190,21 @@ export default function SessionDetail({ sessionId, onBack }) {
               <MapPin className="w-4 h-4 text-cyber-cyan flex-shrink-0 mt-0.5" />
               <div className="min-w-0">
                 <p className="text-[10px] text-cyber-muted font-mono mb-0.5 tracking-widest">PARKING LOCATION</p>
-                {session.location?.address && (
-                  <p className="text-sm text-cyber-cyan font-mono leading-relaxed break-words">
+                {session.location?.label && (
+                  <p className="text-sm text-cyber-cyan font-mono font-bold leading-relaxed break-words">
+                    {session.location.label}
+                  </p>
+                )}
+                {session.location?.address && session.location.address !== session.location?.label && (
+                  <p className="text-xs text-cyber-muted font-mono mt-0.5 leading-relaxed break-words">
                     {session.location.address}
                   </p>
                 )}
-                <p className="text-xs text-cyber-muted font-mono mt-0.5">
-                  {session.location?.lat?.toFixed(6)}, {session.location?.lng?.toFixed(6)}
-                </p>
+                {session.location?.lat !== 0 && session.location?.lat && (
+                  <p className="text-[10px] text-cyber-muted/60 font-mono mt-0.5">
+                    {session.location.lat.toFixed(5)}, {session.location.lng.toFixed(5)}
+                  </p>
+                )}
               </div>
             </div>
             {session.location?.lat !== 0 && (

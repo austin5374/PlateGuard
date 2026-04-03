@@ -143,9 +143,10 @@ function SessionCard({ session, onClick }) {
           <MapPin className="w-3.5 h-3.5 text-cyber-cyan flex-shrink-0" />
           <div className="min-w-0">
             <p className="text-xs text-cyber-cyan font-mono truncate max-w-[180px]">
-              {session.location?.address
-                ? session.location.address.split(',').slice(0, 2).join(',')
-                : `${session.location?.lat?.toFixed(4)}, ${session.location?.lng?.toFixed(4)}`
+              {session.location?.label
+                || (session.location?.address
+                    ? session.location.address.split(',').slice(0, 2).join(',')
+                    : `${session.location?.lat?.toFixed(4)}, ${session.location?.lng?.toFixed(4)}`)
               }
             </p>
             <p className="text-[10px] text-cyber-muted font-mono mt-0.5">
