@@ -1,15 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Shield, Plus, MapPin, Zap, ScanLine, Database, Activity } from 'lucide-react'
+import { Shield, Plus, MapPin, Zap, ScanLine, Database, Activity, Settings } from 'lucide-react'
 import { getActiveSessions } from '../utils/storage.js'
 import { getStats } from '../utils/stats.js'
+import { getPlateRecognizerKey } from '../utils/apikeys.js'
 import { haptic } from '../utils/haptics.js'
 import CountdownTimer from '../components/CountdownTimer.jsx'
+import SettingsModal from '../components/SettingsModal.jsx'
 
 export default function Home({ onNewSession, onViewSession }) {
-  const [sessions, setSessions] = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [stats,    setStats]    = useState(() => getStats())
-  const [tick,     setTick]     = useState(0)
+  const [sessions,      setSessions]      = useState([])
+  const [loading,       setLoading]       = useState(true)
+  const [stats,         setStats]         = useState(() => getStats())
+  const [tick,          setTick]          = useState(0)
+  const [showSettings,  setShowSettings]  = useState(false)
+  const hasApiKey = !!getPlateRecognizerKey()
 
   const loadSessions = useCallback(async () => {
     try {
@@ -32,6 +36,7 @@ export default function Home({ onNewSession, onViewSession }) {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
       {/* ── Header ── */}
       <header className="border-b border-cyber-border bg-cyber-surface/80 backdrop-blur-sm sticky top-0 z-20">
@@ -49,16 +54,45 @@ export default function Home({ onNewSession, onViewSession }) {
             </div>
           </div>
 
-          <div className="text-right">
-            <div className="text-xs font-mono">
-              <span className="text-cyber-green font-bold">{sessions.length}</span>
-              <span className="text-cyber-muted"> ACTIVE</span>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-xs font-mono">
+                <span className="text-cyber-green font-bold">{sessions.length}</span>
+                <span className="text-cyber-muted"> ACTIVE</span>
+              </div>
             </div>
+            <button
+              onClick={() => { haptic.light(); setShowSettings(true) }}
+              className="relative p-2 rounded-lg neon-btn-cyan text-sm"
+              title="Settings"
+            >
+              <Settings size={16} />
+              {!hasApiKey && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-cyber-yellow rounded-full border border-cyber-bg" />
+              )}
+            </button>
           </div>
         </div>
       </header>
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
+
+        {/* ── API key nudge ── */}
+        {!hasApiKey && (
+          <button
+            onClick={() => { haptic.light(); setShowSettings(true) }}
+            className="w-full mb-4 px-4 py-2.5 rounded-lg border border-cyber-yellow/30 bg-cyber-yellow/5
+              flex items-center gap-3 text-left hover:bg-cyber-yellow/10 transition-colors"
+          >
+            <span className="w-2 h-2 rounded-full bg-cyber-yellow flex-shrink-0 animate-pulse" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-mono text-cyber-yellow tracking-wide">
+                Add a free Plate Recognizer API key for accurate OCR + auto state detection
+              </p>
+            </div>
+            <Settings size={13} className="text-cyber-yellow flex-shrink-0" />
+          </button>
+        )}
 
         {/* ── Start Session CTA ── */}
         <button

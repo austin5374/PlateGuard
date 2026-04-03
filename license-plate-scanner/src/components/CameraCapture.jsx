@@ -20,6 +20,7 @@ export default function CameraCapture({ side, existingData, onCapture, onSave, o
   const [photoUrl,    setPhotoUrl]    = useState(existingData?.photo  || null)
   const [ocrProgress, setOcrProgress] = useState(0)
   const [ocrStatus,   setOcrStatus]   = useState('')
+  const [ocrSource,   setOcrSource]   = useState(null) // 'api' | 'ocr' | null
   const [plate,       setPlate]       = useState(existingData?.plate  || '')
   const [state,       setState]       = useState(existingData?.state  || '')
   const [notes,       setNotes]       = useState(existingData?.notes  || '')
@@ -46,12 +47,14 @@ export default function CameraCapture({ side, existingData, onCapture, onSave, o
       setOcrStatus('Pre-processing image...')
       haptic.scan()
 
-      const { plate: extracted } = await extractPlateText(dataUrl, (pct, msg) => {
+      const { plate: extracted, state: detectedState, source } = await extractPlateText(dataUrl, (pct, msg) => {
         setOcrProgress(pct)
         setOcrStatus(msg)
       })
 
       setPlate(extracted || '')
+      if (detectedState) setState(detectedState)
+      setOcrSource(source || null)
       setPhase('confirm')
       haptic.success()
     }
@@ -223,9 +226,21 @@ export default function CameraCapture({ side, existingData, onCapture, onSave, o
 
             {/* OCR result box */}
             <div className={`rounded-lg p-4 border ${accentBord} ${accentBg} space-y-3`}>
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-2 h-2 rounded-full bg-cyber-green animate-pulse" />
-                <span className="text-xs font-mono text-cyber-green tracking-widest">OCR RESULT — TAP TO EDIT</span>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-cyber-green animate-pulse" />
+                  <span className="text-xs font-mono text-cyber-green tracking-widest">RESULT — TAP TO EDIT</span>
+                </div>
+                {ocrSource === 'api' && (
+                  <span className="text-[9px] font-mono bg-cyber-green/10 border border-cyber-green/30 text-cyber-green px-2 py-0.5 rounded tracking-widest">
+                    AI DETECTED
+                  </span>
+                )}
+                {ocrSource === 'ocr' && (
+                  <span className="text-[9px] font-mono bg-cyber-border text-cyber-muted px-2 py-0.5 rounded tracking-widest">
+                    LOCAL OCR
+                  </span>
+                )}
               </div>
 
               {/* Plate number */}
