@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd license-plate-scanner && npm install && npm run build",
-  "outputDirectory": "license-plate-scanner/dist",
-  "framework": null
+  "buildCommand": "npm install && npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite"
 }
