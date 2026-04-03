@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Car } from 'lucide-react'
+import { ChevronDown, ChevronUp, Car, Edit3 } from 'lucide-react'
 
-export default function PlateCard({ side, car }) {
+export default function PlateCard({ side, car, onEdit }) {
   const [expanded, setExpanded] = useState(false)
   const hasData = car && (car.plate || car.photo)
   const sideLabel = side.toUpperCase()
@@ -22,11 +22,11 @@ export default function PlateCard({ side, car }) {
   return (
     <div className={`border rounded-lg ${sideBorder} ${sideBg} overflow-hidden`}>
       {/* Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-3 text-left"
-      >
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between p-3">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-3 flex-1 text-left"
+        >
           <Car size={18} className={sideColor} />
           <div>
             <div className={`font-display font-bold text-xs tracking-widest ${sideColor}`}>
@@ -42,13 +42,28 @@ export default function PlateCard({ side, car }) {
               <div className="text-xs font-mono text-cyber-muted truncate max-w-[180px]">{car.notes}</div>
             )}
           </div>
+        </button>
+
+        <div className="flex items-center gap-2">
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="p-1.5 rounded text-cyber-muted hover:text-cyber-cyan transition-colors"
+              title="Edit"
+            >
+              <Edit3 size={14} />
+            </button>
+          )}
+          {car.photo && (
+            <button onClick={() => setExpanded(!expanded)} className="text-cyber-muted">
+              {expanded
+                ? <ChevronUp size={16} />
+                : <ChevronDown size={16} />
+              }
+            </button>
+          )}
         </div>
-        {car.photo && (
-          expanded
-            ? <ChevronUp size={16} className="text-cyber-muted" />
-            : <ChevronDown size={16} className="text-cyber-muted" />
-        )}
-      </button>
+      </div>
 
       {/* Expanded photo */}
       {expanded && car.photo && (

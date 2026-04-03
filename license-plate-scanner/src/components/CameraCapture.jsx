@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Camera, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Camera, Loader2, CheckCircle2, AlertTriangle, ArrowLeft } from 'lucide-react'
 import { extractPlateText } from '../utils/ocr.js'
 
 const US_STATES = [
@@ -78,22 +78,55 @@ export default function CameraCapture({ side, existingData, onCapture, onSave, o
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  // Determine if used as a full-page (when onCancel is provided as page navigation)
+  const isFullPage = true
+
   return (
-    <div className="relative">
+    <div className={isFullPage ? 'min-h-screen flex flex-col bg-cyber-bg' : 'relative'}>
       {showFlash && <div className="flash-overlay" />}
 
-      <div className={`border rounded-xl ${sideBorder} ${sideBg} p-4 space-y-4 animate-slide-up`}>
-        {/* Header */}
-        <div className="flex items-center justify-between">
+      {/* Plate Secured overlay */}
+      {secured && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="plate-secured-overlay text-center px-8 py-6 rounded-xl"
+            style={{
+              background: 'rgba(0,255,136,0.08)',
+              border: '2px solid #00ff88',
+              boxShadow: '0 0 60px rgba(0,255,136,0.4)'
+            }}>
+            <p className="font-display text-cyber-green text-3xl font-black tracking-widest text-glow-green">
+              PLATE SECURED
+            </p>
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <CheckCircle2 className="w-5 h-5 text-cyber-green" />
+              <p className="font-mono text-cyber-green text-sm tracking-widest">{plate}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full-page header */}
+      <header className="border-b border-cyber-border bg-cyber-surface/80 backdrop-blur-sm sticky top-0 z-20">
+        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
+          <button onClick={onCancel} className="p-2 rounded-lg neon-btn-cyan text-sm">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className={`font-display text-base font-bold tracking-widest ${sideColor}`}>
+              SCAN {side.toUpperCase()} VEHICLE
+            </h1>
+            <p className="text-xs text-cyber-muted font-mono">PHOTO + OCR EXTRACTION</p>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
+      <div className={`border rounded-xl ${sideBorder} ${sideBg} p-4 space-y-4`}>
+        {/* Sub-header (kept for non-full-page card style) */}
+        <div className="flex items-center justify-between sr-only">
           <div className={`font-display font-bold text-sm tracking-widest uppercase ${sideColor}`}>
             {side} vehicle
           </div>
-          <button
-            onClick={onCancel}
-            className="text-cyber-muted hover:text-cyber-red text-xs font-mono transition-colors"
-          >
-            CANCEL
-          </button>
         </div>
 
         {/* Phase: idle — show camera trigger */}
@@ -216,6 +249,7 @@ export default function CameraCapture({ side, existingData, onCapture, onSave, o
           </div>
         )}
       </div>
+      </main>
     </div>
   )
 }
